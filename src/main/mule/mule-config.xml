@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:deal-pre-registration-api="http://www.mulesoft.org/schema/mule/deal-pre-registration-api" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd http://www.mulesoft.org/schema/mule/deal-pre-registration-api http://www.mulesoft.org/schema/mule/deal-pre-registration-api/current/mule-deal-pre-registration-api.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+    <configuration-properties file="mule-artifact.properties"/>
+    <http:listener-config doc:id="482432e2-566e-4af6-ac79-2885e9f840f8" doc:name="CloudHub HTTP" doc:timestamp="1542220880497" name="cloudhub_http">
+        <http:listener-connection host="0.0.0.0" port="${http.port}"/>
+    </http:listener-config>
+    <salesforce:sfdc-config doc:id="0f872cdc-d69b-4e3b-bf95-800d16dfa4aa" doc:name="Salesforce" doc:timestamp="1542380978079" name="salesforce">
+        <salesforce:basic-connection url="https://test.salesforce.com/services/Soap/u/43.0" username="userame" password="password" securityToken="token"/>
+    </salesforce:sfdc-config>
+    <salesforce-composite:composite-config doc:id="3aaf28de-c88e-4929-94c8-70a02c9b772b" doc:name="Salesforce Composite" doc:timestamp="1542381474345" name="salesforce_composite">
+        <salesforce-composite:oauth-user-pass-connection consumerKey="conumerKey" consumerSecret="consumerSecret" password="password" securityToken="token" tokenEndpoint="https://test.salesforce.com/services/oauth2/token" username="username"/>
+    </salesforce-composite:composite-config>
+    <validation:config doc:id="7b61f2ea-fcc4-4593-ad87-b9bce6fca1f3" doc:name="Validation" doc:timestamp="1542397415543" name="validation"/>
+    <deal-pre-registration-api:config doc:id="e297f233-a7fb-4be0-a67b-f755659899f4" doc:name="Deal Pre Registration API" doc:timestamp="1542723604468" name="deal_pre_registration_api">
+        <deal-pre-registration-api:connection/>
+    </deal-pre-registration-api:config>
+    <flow doc:id="783c01f1-c894-4ca9-b464-c35d51121132" doc:name="Deals" doc:timestamp="1542312425656" name="deals">
+        <http:listener config-ref="cloudhub_http" doc:id="a3f8e083-ff3d-4d49-9ed8-3b36f948003e" doc:name="Listener" doc:timestamp="1542740664634" path="/deal">
+            <http:response statusCode="201"/>
+            <http:error-response statusCode="#[if(error.errorType.namespace == &quot;VALIDATION&quot; or error.errorType.identifier == &quot;BAD_REQUEST&quot;)400 else 500]">
+                <http:body>#[output application/json &#13;
+---&#13;
+if((error.errorType.namespace == "DEAL-PRE-REGISTRATION-API" and error.errorType.identifier == "BAD_REQUEST")) (error.muleMessage.typedValue)&#13;
+else if(error.errorType.identifier == "NOT_BLANK_STRING")(payload) else if (error.errorType.identifier == "NOT_EMPTY_COLLECTION") (payload) else&#13;
+{&#13;
+    "message": error.description,&#13;
+    "type" : error.errorType.namespace,&#13;
+    "identifier": error.errorType.identifier&#13;
+}]</http:body>
+            </http:error-response>
+        </http:listener>
+        <set-variable doc:id="91b9d7ef-dc85-4a81-a1fa-7cc32b3bb73b" doc:name="Set Variable" doc:timestamp="1542381116437" value="#[payload]" variableName="originalPayload"/>
+        <deal-pre-registration-api:adddeal config-ref="deal_pre_registration_api" doc:id="20d1e92f-fb6d-4b15-a3f0-301438c0b919" doc:name="Adddeal" doc:timestamp="1542637727451"/>
+        <set-payload doc:id="e5ef0640-d794-4c47-af72-4db0ec4f0c1f" doc:name="set originalPayload as payload" doc:timestamp="1542641685289" value="#[vars.originalPayload]"/>
+        <flow-ref doc:id="704ba6fe-eb91-4166-a0e0-00c7d2bd4f67" doc:name="Flow Ref" doc:timestamp="1542397656151" name="validationsflow"/>
+        <set-variable doc:id="191b5243-830f-4068-a77b-7fdeec9877dd" doc:name="Set Variable" doc:timestamp="1542376928579" value="#[payload.originatorEmail]" variableName="originatorEmail"/>
+        <set-variable doc:id="b5079bf0-5c9d-451a-9946-1ada9f9e4f1a" doc:name="Set Variable" doc:timestamp="1542376947540" value="#[payload.lenderContactEmail]" variableName="lenderContactEmail"/>
+        <salesforce:query config-ref="salesforce" doc:id="87c16012-2c41-4f1d-9449-2fe9375396f9" doc:name="Query" doc:timestamp="1542380978093">
+            <salesforce:salesforce-query>SELECT Id, Email FROM Contact WHERE AccountId = '0013C000009ushJ' AND (Email = ':lenderContactEmail' OR Email = ':originatorEmail')</salesforce:salesforce-query>
+            <salesforce:parameters>#[%dw 2.0
+output application/java  
+---
+{
+  lenderContactEmail: vars.lenderContactEmail,
+  originatorEmail: vars.originatorEmail
+}]</salesforce:parameters>
+        </salesforce:query>
+        <ee:transform doc:id="23db23e0-c443-452a-ae2f-a123a9012315" doc:name="Transform" doc:timestamp="1542384559974">
+            <ee:variables>
+                <ee:set-variable variableName="lenderContactId"><![CDATA[%dw 2.0
+output application/java
+---
+(payload filter ((item, index) -> item.Email == vars.lenderContactEmail))[0].Id]]></ee:set-variable>
+                <ee:set-variable variableName="originatorId"><![CDATA[%dw 2.0
+output application/java
+---
+(payload filter ((item, index) -> item.Email == vars.originatorEmail))[0].Id]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <set-payload doc:id="db330c97-80e8-41a8-92e0-ca5430efbc60" doc:name="Set Payload" doc:timestamp="1542381165745" value="#[vars.originalPayload]"/>
+        <ee:transform doc:id="d6ec1794-dec9-4e90-813f-c7abc50442da" doc:name="Transform" doc:timestamp="1542396643682">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[{
+	attributes: {
+		"type": "Opportunity",
+		"referenceId": payload.reference
+	},
+	Agreement_Type__c: payload.agreementType,
+	AccountId: '0013C000009ushJ',
+	Name: payload.dealName,
+	StageName: 'Pre-Registered',
+	Originator__c: vars.originatorId,
+	Lender_Contact_Name__c: vars.lenderContactId,
+	Chapter_9_Small_Loans__c: payload.chapter9SmallLoansIndicator,
+	Estimated_MBS_Issuance_Date__c: payload.estimatedMBSIssuanceDate,
+	Excluded_From_Scorecard_Cap__c: payload.excludedFromScorecardCapPercent,
+	Execution_Type__c: payload.executionType,
+	Loan_Purpose__c: payload.loanPurposeType,
+	MATS_Structured__c: payload.MATSStructuredType,
+	Submission_Type__c: payload.submissionType,
+	Application_Issued_to_the_Borrower__c: payload.applicationIssuedToTheBorrowerIndicator,
+	Interest_Rate_Conversion_Type__c: payload.interestRateConversionType,
+	Green_Financing_Type__c: payload.greenFinancingType,
+	Amount: payload.dealAmount,
+	CloseDate: payload.estimatedLoanClosingDate,
+	Deal_Participants__r : {
+		records: payload.dealParticipants map ( dealParticipant , indexOfDealParticipant ) -> {
+			attributes: {
+				"type": "Deal_Participant__c",
+				"referenceId": dealParticipant.reference
+			},
+			Deal_Participant__c: '0013C000009ushJ',
+			Entity_Name__c: dealParticipant.entityName,
+			First_Name__c: dealParticipant.firstName,
+			Last_Name__c: dealParticipant.lastName,
+			Middle_Name__c: dealParticipant.middleName,
+			Participant_Role__c: dealParticipant.participantRoleType
+		}
+	},
+    Properties__r: {
+        records: payload.properties map ( property , indexOfProperty ) -> {
+	attributes: {
+		"type": "Property__c",
+		"referenceId": property.reference
+	},
+	Name: property.propertyName,
+	Accounts_Receivable_as_a__c: property.accountsReceivablePercent,
+	Affordability_Program__c: property.affordabilityProgramType,
+	Age_Restricted__c: property.ageRestrictedIndicator,
+	Alzheimer_Care__c: property.alzheimerCareIndicator,
+	Alzheimer_Care_Beds__c: property.alzheimerCareBedCount,
+	Alzheimer_Care_Units__c: property.alzheimerCareUnitCount,
+	Alzheimer_Care1__c: property.alzheimerCarePercent as Number,
+	Appraised_Gross_Sell_Out_Value__c: property.estimatedGrossSellOutValueAmount,
+	Assisted_Living1__c: property.assistedLivingPercent,
+	Assisted_Living_Beds__c: property.assistedLivingBedCount,
+	Assisted_Living_Units__c: property.assistedLivingUnitCount,
+	Assisted_Living__c: property.assistedLivingIndicator,
+	City__c: property.city,
+	Community_Quality_Rating__c: property.communityQualityRatingType,
+	Distance_to_Campus_Library__c: property.distanceToMainCampusInMiles,
+	Do_the_unsold_units_generate_a_positive__c: property.unsoldUnitsPosOrNegCarryIndicator,
+	Does_any_1_one_Sponsor_own_more_than_4__c: property.anySponsorOwnMoreThan40PctIndicator,
+	Independent_Living1__c: property.independentLivingPercent,
+	Independent_Living_Beds__c: property.independentLivingBedCount,
+	Independent_Living_Units__c: property.independentLivingUnitCount,
+	Independent_Living__c: property.independentLivingIndicator,
+	Init_7_years_of_tax_credit_compliance__c: property.taxCreditComplianceIndicator,
+	MAH__c: property.MAHIndicator,
+	Medicaid_Beds1__c: property.medicaidBedsPercent,
+	Medicaid_Units1__c: property.medicaidUnitsPercent,
+	Medicaid__c: property.medicaidIndicator,
+	Name_of_School_s_Property_Serves__c: property.nameOfSchoolPropertyServes,
+	New_Maintenance_Fees_as_a_of_Comparabl__c: property.newMaintFeesPercentOfComparableRentsPercent,
+	Number_of_Medicaid_Residents__c: property.numberOfMedicaidResidents,
+	Number_of_Other_Subsidies_Residents__c: property.numberOfOtherSubsidiesResidents,
+	Number_of_Student_Properties_Owned__c: property.numberOfStudentUnitsOwnedBySponsor,
+	Number_of_Student_Units__c: property.numberOfStudentUnitsManagedByPropertyManager,
+	Number_of_Units__c: property.numberOfUnits,
+	Other_Affordability_Program__c: property.otherAffordabilityProgramText,
+	Other_Subsidies_Beds__c: property.otherSubsidiesBedsPercent,
+	Other_Subsidies_Units__c: property.otherSubsidiesUnitsPercent,
+	Other_Subsidies__c: property.otherSubsidiesIndicator,
+	Percentage_of_Full_Time_Students__c: property.percentOfFullTimeStudentsToTotalStudents,
+	Percentage_of_Units_Sold_to_Shareholders__c: property.percentOfUnitsSoldToShareholders,
+	Percentage_of_Units_with_12_Month_Leases__c: property.percentOfUnitsWith12MonthLeases,
+	Postal_Code__c: property.postalCode,
+	Primary_Property_Type__c: property.propertyType,
+	Projected_Maintenance_Fee_Increase_to_ac__c: property.projectedMaintFeeIncrForBalancedBudgetPercent,
+	Prop_located_on_college_owned_trans_line__c: property.locatedOnCollegeOwnedTransLineIndicator,
+	Property_Subj_to_Ground_Lease_or_Master__c: property.propSubjectToMasterOrGroundIndicator,
+	Rel_Perct_of_Undergrad_to_Grad_Students__c: property.percentOfUndergradToTotalStudents,
+	Rent_By_the_Room_or_By_the_Bed__c: property.rentByRoomOrByBedIndicator,
+	Rental_Homes__c: property.rentalHomesPercent,
+	Reserve_Balance_as_a_of_Annual_Mainten__c: property.reserveBalanceAsOfAnnualMaintPercent,
+	Seniors_Service_License__c: property.certificationLicensureIndicator,
+	Skilled_Nursing1__c: property.skilledNursingPercent,
+	Skilled_Nursing_Beds__c: property.skilledNursingBedCount,
+	Skilled_Nursing_Units__c: property.skilledNursingUnitCount,
+	Skilled_Nursing__c: property.skilledNursingIndicator,
+	Sponsor_Experience_in_Student_Market__c: property.sponsorExperienceInStudentHousing,
+	State__c: property.state,
+	Street_Address__c: property.streetAddress,
+	Student_Enrollment__c: property.studentEnrollmentCount,
+	Tax_Credit_Expiration_Date__c: property.taxCreditExpirationDate,
+	Year_Built__c: property.yearBuilt,
+	affordable_at_below_50_AMI__c: property.numberAffordableAtBelow50AMI,
+	affordable_at_below_60_AMI__c: property.numberAffordableAtBelow60AMI,
+	Extended_Use_Expiration_Date__c: property.extendedUseExpirationDate,
+	Park_Model_RV_Resort_Component__c: property.parkModelRVResortComponentIndicator,
+	Percentage_of_Students_at_the_Property__c: property.percentOfStudentsAtProperty,
+	Sponsor_s_Exp_in_Stud_Hous_This_Market__c: property.sponsorExpInStudHousThisMarkt,
+	Units_50_of_AMI__c: property.percentOfUnitsLessThan50OfAMI,
+	Units_80_of_AMI__c: property.percentOfUnitsLessThan80OfAMI,
+	Year_Last_Renovated__c: property.yearLastRenovated,
+	Moderate_Rehabilitation__c: property.moderateRehabilitationIndicator,
+	Rehabilitation_Work_Escrow_Amount__c: property.rehabilitationWorkEscrowAmount,
+	Rehabilitation_Work_unit__c: property.rehabilitationWorkPerUnitAmount,
+	Intention_to_Resyndicate__c: property.intentionToResyndicateIndicator,
+	Green_Building_Certification_Type__c: property.greenBuildingCertificationType,
+	Lessee_Affiliation__c: property.lesseeAffiliationType,
+	Management_Agreement__c: property.managementAgreementIndicator,
+	NCF_to_Lease_Ratio__c: property.NCFToLeaseRatio,
+	Operating_Lease__c: property.operatingLeaseIndicator
+}
+    }
+}]]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <salesforce-composite:create-sobject-tree config-ref="salesforce_composite" doc:id="15b4e3e3-384a-43eb-8889-74983a9a3855" doc:name="Create Sobject Tree" doc:timestamp="1542381075327" type="Opportunity"/>
+        <ee:transform doc:id="af5eb6b6-3e6b-4522-a43a-f0c7a8507bca" doc:name="Transform" doc:timestamp="1542395047240">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload.results[0].id]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <salesforce:query config-ref="salesforce" doc:id="46d68a48-ac02-40b9-b230-13a3a915a409" doc:name="Query" doc:timestamp="1542395476163">
+            <salesforce:salesforce-query>SELECT Deal_ID__c FROM Opportunity WHERE Id=':id'</salesforce:salesforce-query>
+            <salesforce:parameters>#[%dw 2.0
+output application/java  
+---
+{
+  id: payload
+}]</salesforce:parameters>
+        </salesforce:query>
+        <ee:transform doc:id="78a6b133-44fb-422b-9591-2d6c3eef3644" doc:name="Transform" doc:timestamp="1542396257798">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "dealId":payload[0].Deal_ID__c
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow doc:id="fb584347-7ad4-4a50-a8fe-504698361d44" doc:name="ValidationsFlow" doc:timestamp="1542397256670" name="validationsflow">
+        <ee:transform doc:id="8aab49e9-f580-4d7b-8b11-542b22681649" doc:name="Extract Properties with invalid input" doc:timestamp="1542652365328">
+            <ee:variables>
+                <ee:set-variable variableName="invalidInpRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(payload.properties filter ((item,index)-> item.yearBuilt == "" or item.yearBuilt == null or item.yearBuilt == "0")) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                <ee:set-variable variableName="invPropNameRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(payload.properties filter ((item,index)-> isEmpty(item.propertyName))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <try doc:id="ef834f72-c702-4074-81de-1bc5314c8e60" doc:name="Try" doc:timestamp="1542738931841">
+            <validation:is-blank-string config-ref="validation" doc:id="5f9c6d12-db85-4473-94c8-e1306f776f5b" doc:name="Is Blank String" doc:timestamp="1542651941994" message="#[&quot;Properties (&quot; ++ vars.invalidInpRefs ++ &quot; ) have invalid value for yearBuilt field. It should be the year property was built.&quot;]" value="#[vars.invalidInpRefs]"/>
+            <validation:is-blank-string config-ref="validation" doc:id="7b56f6d0-93e0-42b3-a99a-6b98cb743d5b" doc:name="Is Blank String" doc:timestamp="1542652056419" message="#[&quot;Properties (&quot; ++ vars.invPropNameRefs ++ &quot; ) should have values for PropretyName field.&quot;]" value="#[vars.invPropNameRefs]"/>
+            <error-handler doc:id="a4e931e6-a92e-45a1-a899-230e54a06d4a" doc:name="" doc:timestamp="1542738932456">
+                <on-error-propagate type="VALIDATION:NOT_BLANK_STRING">
+                    <ee:transform doc:id="3b0ab250-d43c-483d-8f66-b4c55689fc6b" doc:name="Transform" doc:timestamp="1542743064000">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+errors:[{
+    "properties":[
+    ({
+        "references":vars.invalidInpRefs,
+        "message":"Year built field is required"
+    }) if(vars.invalidInpRefs != ""),
+    ({
+        "references":vars.invPropNameRefs,
+        "message":"Property Name is required"
+    }) if(vars.invPropNameRefs != "")
+    ]
+}]]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                </on-error-propagate>
+            </error-handler>
+        </try>
+        <validation:is-not-empty-collection config-ref="validation" doc:id="603605d3-b36f-4b22-b5eb-1bf112d1b71f" doc:name="Is Not Empty Collection" doc:timestamp="1542401416527" message="Deal Participant should have at least one Sponsor" values="#[(payload.dealParticipants filter ((item, index) -&gt; item.participantRoleType contains(&quot;Sponsor&quot;)))]"/>
+        <choice doc:id="864826a5-7d2d-4f78-809b-13c0ea812b53" doc:name="Choice" doc:timestamp="1542402944196">
+            <when expression='#[sizeOf(payload.properties filter($.propertyType == "Seniors")) != 0]'>
+                <set-variable doc:id="077d361e-61f3-489f-9df1-f9be8af8e11c" doc:name="Set Variable" doc:timestamp="1542403651885" value="#[payload.properties filter($.propertyType == &quot;Seniors&quot;)]" variableName="senProps"/>
+                <ee:transform doc:id="6d4c5773-ae79-4fff-a720-2448e98702fe" doc:name="Transform" doc:timestamp="1542745452902">
+                    <ee:variables>
+                        <ee:set-variable variableName="assistedLivingRefs"><![CDATA[%dw 2.0
+output application/java
+---
+((vars.senProps filter ($.assistedLivingIndicator == "Yes" and (isEmpty($.assistedLivingBedCount) == true or isEmpty($.assistedLivingUnitCount) == true or isEmpty($.assistedLivingPercent) == true))) map ($.reference)) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="indLivingRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.senProps filter (($.independentLivingIndicator == "Yes" and ($.isEmpty($.independentLivingBedCount) == true or isEmpty($.independentLivingUnitCount) == true or isEmpty($.independentLivingPercent) == true))) map ($.reference)) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="alzRefs"><![CDATA[%dw 2.0
+output application/json
+---
+(vars.senProps filter ($.alzheimerCareIndicator == "Yes" and (isEmpty($.alzheimerCareBedCount) == true or isEmpty($.alzheimerCarePercent) == true or isEmpty($.alzheimerCareUnitCount) == true))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="medRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.senProps filter ( $.medicaidIndicator == "Yes" and (isEmpty($.numberOfMedicaidResidents) == true or isEmpty($.medicaidBedsPercent) == true or isEmpty($.medicaidUnitsPercent) == true))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="subsRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.senProps filter ( $.otherSubsidiesIndicator == "Yes" and (isEmpty($.numberOfOtherSubsidiesResidents) == true or isEmpty($.otherSubsidiesBedsPercent) == true or isEmpty($.otherSubsidiesUnitsPercent) == true))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="certRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.senProps filter ((isEmpty($.certificationLicensureIndicator) == true))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="managementRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.senProps filter ((isEmpty($.managementAgreementIndicator) == true))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                        <ee:set-variable variableName="leaseRefs"><![CDATA[%dw 2.0
+output application/java
+---
+(vars.senProps filter ((isEmpty($.operatingLeaseIndicator) == true))) map ($.reference) default [""] joinBy(", ")]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                <try doc:id="1ac44a61-537b-4bdc-9d70-d9d93711e487" doc:name="Try" doc:timestamp="1542740551277">
+                    <validation:is-empty-collection config-ref="validation" doc:id="909afb89-1def-4337-9e55-47ab89fa47d8" doc:name="Assisted Living" doc:timestamp="1542746981154" message="#[&quot;Properties (&quot; ++ vars.assistedLivingRefs ++ &quot;) should have values for assistedLivingBedCount, assistedLivingUnitCount and assistedLivingPercent&quot;]" values="#[vars.senProps filter ($.assistedLivingIndicator == &quot;Yes&quot; and (isEmpty($.assistedLivingBedCount) == true or isEmpty($.assistedLivingUnitCount) == true or isEmpty($.assistedLivingPercent) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="5186d2ae-6286-4f0e-83a2-8420a9ea4fc9" doc:name="Independent Living" doc:timestamp="1542747004796" message="#[&quot;Properties (&quot; ++ vars.indLivingRefs ++ &quot;) should have independentLivingBedCount, independentLivingPercent and independentLivingUnitCount&quot;]" values="#[vars.senProps filter ($.independentLivingIndicator == &quot;Yes&quot; and (isEmpty($.independentLivingBedCount) == true or isEmpty($.independentLivingPercent) == true or isEmpty($.independentLivingUnitCount) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="d5e85606-8feb-4e1e-973c-76392fee6cd6" doc:name="Alzheimer" doc:timestamp="1542747023242" message="#[&quot;Properties ( &quot; ++ vars.alzRefs ++ &quot;) should have alzheimerCareBedCount, alzheimerCarePercent and alzheimerCareUnitCount values&quot;]" values="#[vars.senProps filter ($.alzheimerCareIndicator == &quot;Yes&quot; and (isEmpty($.alzheimerCareBedCount) == true or isEmpty($.alzheimerCarePercent) == true or isEmpty($.alzheimerCareUnitCount) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="c6674509-7445-49ce-aa50-d1fc12d0cfe5" doc:name="Medicaid" doc:timestamp="1542747042138" message="#[&quot;Properties ( &quot; ++ vars.medRefs ++ &quot; ) should have values for numberOfMedicaidResidents, medicaidBedsPercent and medicaidUnitsPercent&quot;]" values="#[vars.senProps filter ($.medicaidIndicator == &quot;Yes&quot; and (isEmpty($.numberOfMedicaidResidents) == true or isEmpty($.medicaidBedsPercent) == true or isEmpty($.medicaidUnitsPercent) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="46e54ac4-c431-4149-bb4f-e38ccec23790" doc:name="Subsidies" doc:timestamp="1542747063281" message="#[&quot;Properties ( &quot; ++ vars.subsRefs ++ &quot; ) should have values for numberOfOtherSubsidiesResidents, otherSubsidiesBedsPercent and otherSubsidiesUnitsPercent&quot;]" values="#[vars.senProps filter ($.otherSubsidiesIndicator == &quot;Yes&quot; and (isEmpty($.numberOfOtherSubsidiesResidents) == true or isEmpty($.otherSubsidiesBedsPercent) == true or isEmpty($.otherSubsidiesUnitsPercent) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="430327ec-48af-4fa3-b2e3-26f7b7bbbafa" doc:name="certificationLicensureIndicator" doc:timestamp="1542648741958" message="#[&quot;Properties ( &quot; ++ vars.certRefs ++ &quot; ) should have value for certificationLicensureIndicator&quot;]" values="#[vars.senProps filter ((isEmpty($.certificationLicensureIndicator) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="516b6de1-d23f-48ba-865a-e2064f077250" doc:name="managementAgreementIndicator" doc:timestamp="1542648752114" message="#[&quot;Properties ( &quot; ++ vars.managementRefs ++ &quot; ) should have value for managementAgreementIndicator&quot;]" values="#[vars.senProps filter ((isEmpty($.managementAgreementIndicator) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="07e1656f-c02e-4849-bdd8-f20e488bd5a4" doc:name="operatingLeaseIndicator" doc:timestamp="1542648760143" message="#[&quot;Properties ( &quot; ++ vars.leaseRefs ++ &quot; ) should have value for operatingLeaseIndicator&quot;]" values="#[vars.senProps filter ((isEmpty($.operatingLeaseIndicator) == true))]"/>
+                    <error-handler doc:id="7d7ef0c4-7982-4ac3-883b-18145674a2df" doc:name="" doc:timestamp="1542740551494">
+                        <on-error-propagate type="VALIDATION:NOT_EMPTY_COLLECTION">
+                            <ee:transform doc:id="fb5f1563-d102-4865-8369-aff8d3a5299a" doc:name="Transform" doc:timestamp="1542811299888">
+                                <ee:message>
+                                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+errors:[{
+    "properties":[
+    ({
+        "references":vars.managementRefs,
+        "message":"managementAgreementIndicator is required"
+    }) if(vars.managementRefs != ""),
+    ({
+        "references":vars.medRefs,
+        "message":"numberOfMedicaidResidents, medicaidBedsPercent and medicaidUnitsPercent are required"
+    }) if(vars.medRefs != ""),
+	({
+        "references":vars.subsRefs,
+        "message":"numberOfOtherSubsidiesResidents, otherSubsidiesBedsPercent and otherSubsidiesUnitsPercent are required"
+    }) if(vars.subsRefs != ""),
+	({
+        "references":vars.assistedLivingRefs,
+        "message":"assistedLivingBedCount, assistedLivingUnitCount and assistedLivingPercent are required"
+    }) if(vars.assistedLivingRefs != ""),
+	({
+        "references":vars.alzRefs,
+        "message":"alzheimerCareBedCount, alzheimerCarePercent and alzheimerCareUnitCount values are required"
+    }) if(vars.alzRefs != ""),
+	({
+        "references":vars.indLivingRefs,
+        "message":"independentLivingBedCount, independentLivingPercent and independentLivingUnitCount are required"
+    }) if(vars.indLivingRefs != ""),
+	({
+        "references":vars.certRefs,
+        "message":"certificationLicensureIndicator is required"
+    }) if(vars.certRefs != ""),
+	({
+        "references":vars.leaseRefs,
+        "message":"operatingLeaseIndicator is required"
+    }) if(vars.leaseRefs != "")
+    ]
+}]]]></ee:set-payload>
+                                </ee:message>
+                            </ee:transform>
+                        </on-error-propagate>
+                    </error-handler>
+                </try>
+            </when>
+            <otherwise>
+                <set-payload doc:id="f4802dcb-2e54-4a8a-a776-02d8070ae113" doc:name="Do nothing" doc:timestamp="1542595471199" value="#[payload]"/>
+            </otherwise>
+        </choice>
+    </flow>
+</mule>
