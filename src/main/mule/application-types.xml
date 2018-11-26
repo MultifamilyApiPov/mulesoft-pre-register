@@ -651,6 +651,83 @@
   "$schema": "http://json-schema.org/draft-06/schema#"
 }]]></types:shape>
     </types:type>
+    <types:type name="GoogleGeoCoding" format="json">
+      <types:example format="json"><![CDATA[{
+   "results" : [
+      {
+         "address_components" : [
+            {
+               "long_name" : "6527",
+               "short_name" : "6527",
+               "types" : [ "street_number" ]
+            },
+            {
+               "long_name" : "Deerfield Drive",
+               "short_name" : "Deerfield Dr",
+               "types" : [ "route" ]
+            },
+            {
+               "long_name" : "Northfield",
+               "short_name" : "Northfield",
+               "types" : [ "locality", "political" ]
+            },
+            {
+               "long_name" : "Sagamore Hills Township",
+               "short_name" : "Sagamore Hills Township",
+               "types" : [ "administrative_area_level_3", "political" ]
+            },
+            {
+               "long_name" : "Summit County",
+               "short_name" : "Summit County",
+               "types" : [ "administrative_area_level_2", "political" ]
+            },
+            {
+               "long_name" : "Ohio",
+               "short_name" : "OH",
+               "types" : [ "administrative_area_level_1", "political" ]
+            },
+            {
+               "long_name" : "United States",
+               "short_name" : "US",
+               "types" : [ "country", "political" ]
+            },
+            {
+               "long_name" : "44067",
+               "short_name" : "44067",
+               "types" : [ "postal_code" ]
+            },
+            {
+               "long_name" : "3108",
+               "short_name" : "3108",
+               "types" : [ "postal_code_suffix" ]
+            }
+         ],
+         "formatted_address" : "6527 Deerfield Dr, Northfield, OH 44067, USA",
+         "geometry" : {
+            "location" : {
+               "lat" : 41.3122561,
+               "lng" : -81.56815659999999
+            },
+            "location_type" : "RANGE_INTERPOLATED",
+            "viewport" : {
+               "northeast" : {
+                  "lat" : 41.3136050802915,
+                  "lng" : -81.5668076197085
+               },
+               "southwest" : {
+                  "lat" : 41.3109071197085,
+                  "lng" : -81.5695055802915
+               }
+            }
+         },
+         "partial_match" : true,
+         "place_id" : "Eiw2NTI3IERlZXJmaWVsZCBEciwgTm9ydGhmaWVsZCwgT0ggNDQwNjcsIFVTQSIbEhkKFAoSCWslv9ry4DCIESYjCn3Tm7-qEP8y",
+         "types" : [ "street_address" ]
+      }
+   ],
+   "status" : "OK"
+}]]></types:example>
+    </types:type>
   </types:catalog>
   <types:enrichment select="#204193a1-36df-473a-8e19-76a34103b820">
     <types:processor-declaration/>
@@ -791,5 +868,32 @@
   </types:enrichment>
   <types:enrichment select="#fb5f1563-d102-4865-8369-aff8d3a5299a">
     <types:processor-declaration/>
+  </types:enrichment>
+  <types:enrichment select="#a41fa67e-a972-401e-b49d-7c5bde8b1a61">
+    <types:processor-declaration/>
+  </types:enrichment>
+  <types:enrichment select="#19e3cb0c-7b7a-4dc5-8f5b-8703151cb7c8">
+    <types:processor-declaration/>
+  </types:enrichment>
+  <types:enrichment select="#4e59d791-23ef-4f37-8ff9-da2c84e72809">
+    <types:processor-declaration/>
+  </types:enrichment>
+  <types:enrichment select="#cf30dc52-2135-4cc9-a3e7-46a79e33c684">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="GoogleGeoCoding"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#c2f7c7b7-a1e0-4f55-9b41-f340bd4dd8a7">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="GoogleGeoCoding"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
   </types:enrichment>
 </types:mule>

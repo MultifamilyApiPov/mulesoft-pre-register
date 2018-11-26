@@ -4,24 +4,27 @@
     <http:listener-config doc:id="482432e2-566e-4af6-ac79-2885e9f840f8" doc:name="CloudHub HTTP" doc:timestamp="1542220880497" name="cloudhub_http">
         <http:listener-connection host="0.0.0.0" port="${http.port}"/>
     </http:listener-config>
-    <salesforce:sfdc-config doc:id="0f872cdc-d69b-4e3b-bf95-800d16dfa4aa" doc:name="Salesforce" doc:timestamp="1542380978079" name="salesforce">
-        <salesforce:basic-connection url="https://test.salesforce.com/services/Soap/u/43.0" username="userame" password="password" securityToken="token"/>
+    <salesforce:sfdc-config doc:id="0f872cdc-d69b-4e3b-bf95-800d16dfa4aa" doc:name="Salesforce" doc:timestamp="1542814347623" name="salesforce">
+        <salesforce:basic-connection password="${sfdc.password}" securityToken="${sfdc.securityToken}" url="https://test.salesforce.com/services/Soap/u/43.0" username="${sfdc.username}"/>
     </salesforce:sfdc-config>
-    <salesforce-composite:composite-config doc:id="3aaf28de-c88e-4929-94c8-70a02c9b772b" doc:name="Salesforce Composite" doc:timestamp="1542381474345" name="salesforce_composite">
-        <salesforce-composite:oauth-user-pass-connection consumerKey="conumerKey" consumerSecret="consumerSecret" password="password" securityToken="token" tokenEndpoint="https://test.salesforce.com/services/oauth2/token" username="username"/>
+    <salesforce-composite:composite-config doc:id="3aaf28de-c88e-4929-94c8-70a02c9b772b" doc:name="Salesforce Composite" doc:timestamp="1542814335336" name="salesforce_composite">
+        <salesforce-composite:oauth-user-pass-connection consumerKey="${sfdc.consumerKey}" consumerSecret="${sfdc.consumerSecret}" password="${sfdc.password}" securityToken="${sfdc.securityToken}" tokenEndpoint="https://test.salesforce.com/services/oauth2/token" username="${sfdc.username}"/>
     </salesforce-composite:composite-config>
     <validation:config doc:id="7b61f2ea-fcc4-4593-ad87-b9bce6fca1f3" doc:name="Validation" doc:timestamp="1542397415543" name="validation"/>
     <deal-pre-registration-api:config doc:id="e297f233-a7fb-4be0-a67b-f755659899f4" doc:name="Deal Pre Registration API" doc:timestamp="1542723604468" name="deal_pre_registration_api">
         <deal-pre-registration-api:connection/>
     </deal-pre-registration-api:config>
+    <http:request-config doc:id="d40d7069-3ed8-411d-a7f8-349a703f77c1" doc:name="HTTP Request" doc:timestamp="1543242306005" name="http_request">
+        <http:request-connection protocol="HTTPS"/>
+    </http:request-config>
     <flow doc:id="783c01f1-c894-4ca9-b464-c35d51121132" doc:name="Deals" doc:timestamp="1542312425656" name="deals">
-        <http:listener config-ref="cloudhub_http" doc:id="a3f8e083-ff3d-4d49-9ed8-3b36f948003e" doc:name="Listener" doc:timestamp="1542740664634" path="/deal">
+        <http:listener config-ref="cloudhub_http" doc:id="a3f8e083-ff3d-4d49-9ed8-3b36f948003e" doc:name="Listener" doc:timestamp="1542822807677" path="/deal">
             <http:response statusCode="201"/>
             <http:error-response statusCode="#[if(error.errorType.namespace == &quot;VALIDATION&quot; or error.errorType.identifier == &quot;BAD_REQUEST&quot;)400 else 500]">
                 <http:body>#[output application/json &#13;
 ---&#13;
-if((error.errorType.namespace == "DEAL-PRE-REGISTRATION-API" and error.errorType.identifier == "BAD_REQUEST")) (error.muleMessage.typedValue)&#13;
-else if(error.errorType.identifier == "NOT_BLANK_STRING")(payload) else if (error.errorType.identifier == "NOT_EMPTY_COLLECTION") (payload) else&#13;
+ if((error.errorType.namespace == "DEAL-PRE-REGISTRATION-API" and error.errorType.identifier == "BAD_REQUEST")) (error.muleMessage.typedValue)&#13;
+else if(error.errorType.identifier == "NOT_BLANK_STRING" or (error.errorType.namespace == "SALESFORCE-COMPOSITE" and error.errorType.identifier == "UNKNOWN"))(payload) else if (error.errorType.identifier == "NOT_EMPTY_COLLECTION") (payload) else&#13;
 {&#13;
     "message": error.description,&#13;
     "type" : error.errorType.namespace,&#13;
@@ -57,8 +60,9 @@ output application/java
 (payload filter ((item, index) -> item.Email == vars.originatorEmail))[0].Id]]></ee:set-variable>
             </ee:variables>
         </ee:transform>
+        <flow-ref doc:id="321bad4b-53f9-4d8f-8977-4bfbc62a741f" doc:name="Flow Ref" doc:timestamp="1543248290744" name="googlegeocode"/>
         <set-payload doc:id="db330c97-80e8-41a8-92e0-ca5430efbc60" doc:name="Set Payload" doc:timestamp="1542381165745" value="#[vars.originalPayload]"/>
-        <ee:transform doc:id="d6ec1794-dec9-4e90-813f-c7abc50442da" doc:name="Transform" doc:timestamp="1542396643682">
+        <ee:transform doc:id="d6ec1794-dec9-4e90-813f-c7abc50442da" doc:name="Transform" doc:timestamp="1543263706650">
             <ee:message>
                 <ee:set-payload><![CDATA[%dw 2.0
 output application/java
@@ -184,13 +188,24 @@ output application/java
 	Lessee_Affiliation__c: property.lesseeAffiliationType,
 	Management_Agreement__c: property.managementAgreementIndicator,
 	NCF_to_Lease_Ratio__c: property.NCFToLeaseRatio,
-	Operating_Lease__c: property.operatingLeaseIndicator
+	Operating_Lease__c: property.operatingLeaseIndicator,
+   Location__Latitude__s: (vars.propsToGeo filter ((item,index)->item.reference == property.reference and item.status == "OK"))[0].latitude,
+    Address_Latitude__c:((((vars.propsToGeo filter ((latItem, latIndex)->latItem.reference == property.reference and latItem.status == "OK"))[0].latitude) default "") ++ "")[0 to 10] default ((((vars.propsToGeo filter ((latItem, latIndex)->latItem.reference == property.reference and latItem.status == "OK"))[0].latitude) default "") ++ ""),
+   Location__Longitude__s: (vars.propsToGeo filter ((item,index)->item.reference == property.reference and item.status == "OK"))[0].longitude,
+   Address_Longitude__c:((((vars.propsToGeo filter ((item,index)->item.reference == property.reference and item.status == "OK"))[0].longitude) default "") ++ "")[0 to 10] default ((((vars.propsToGeo filter ((item,index)->item.reference == property.reference and item.status == "OK"))[0].longitude) default "") ++ "")
 }
     }
 }]]]></ee:set-payload>
             </ee:message>
         </ee:transform>
-        <salesforce-composite:create-sobject-tree config-ref="salesforce_composite" doc:id="15b4e3e3-384a-43eb-8889-74983a9a3855" doc:name="Create Sobject Tree" doc:timestamp="1542381075327" type="Opportunity"/>
+        <try doc:id="8ce48c6a-6137-4ee3-a8a7-3741bca587e5" doc:name="Try" doc:timestamp="1542822609182">
+            <salesforce-composite:create-sobject-tree config-ref="salesforce_composite" doc:id="15b4e3e3-384a-43eb-8889-74983a9a3855" doc:name="Create Sobject Tree" doc:timestamp="1542381075327" type="Opportunity"/>
+            <error-handler doc:id="c80c92e6-63f6-4881-8420-1dc85d4d0465" doc:name="" doc:timestamp="1542822609341">
+                <on-error-propagate type="SALESFORCE-COMPOSITE:UNKNOWN">
+                    <flow-ref doc:id="5c55ff95-8410-4e0e-87bb-2274ff794338" doc:name="Flow Ref" doc:timestamp="1542822636787" name="translatebackend"/>
+                </on-error-propagate>
+            </error-handler>
+        </try>
         <ee:transform doc:id="af5eb6b6-3e6b-4522-a43a-f0c7a8507bca" doc:name="Transform" doc:timestamp="1542395047240">
             <ee:message>
                 <ee:set-payload><![CDATA[%dw 2.0
@@ -208,13 +223,16 @@ output application/java
   id: payload
 }]</salesforce:parameters>
         </salesforce:query>
-        <ee:transform doc:id="78a6b133-44fb-422b-9591-2d6c3eef3644" doc:name="Transform" doc:timestamp="1542396257798">
+        <ee:transform doc:id="78a6b133-44fb-422b-9591-2d6c3eef3644" doc:name="Transform" doc:timestamp="1543249505619">
             <ee:message>
                 <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
-    "dealId":payload[0].Deal_ID__c
+    "dealId":payload[0].Deal_ID__c,
+    ("geocoding":{
+        "failed":vars.propsToGeo filter ($.status != "OK") map ($.reference)
+    }) if(sizeOf((vars.propsToGeo filter ($.status != "OK")) default []) > 0)
 }]]></ee:set-payload>
             </ee:message>
         </ee:transform>
@@ -233,8 +251,8 @@ output application/java
             </ee:variables>
         </ee:transform>
         <try doc:id="ef834f72-c702-4074-81de-1bc5314c8e60" doc:name="Try" doc:timestamp="1542738931841">
-            <validation:is-blank-string config-ref="validation" doc:id="5f9c6d12-db85-4473-94c8-e1306f776f5b" doc:name="Is Blank String" doc:timestamp="1542651941994" message="#[&quot;Properties (&quot; ++ vars.invalidInpRefs ++ &quot; ) have invalid value for yearBuilt field. It should be the year property was built.&quot;]" value="#[vars.invalidInpRefs]"/>
-            <validation:is-blank-string config-ref="validation" doc:id="7b56f6d0-93e0-42b3-a99a-6b98cb743d5b" doc:name="Is Blank String" doc:timestamp="1542652056419" message="#[&quot;Properties (&quot; ++ vars.invPropNameRefs ++ &quot; ) should have values for PropretyName field.&quot;]" value="#[vars.invPropNameRefs]"/>
+            <validation:is-blank-string config-ref="validation" doc:id="5f9c6d12-db85-4473-94c8-e1306f776f5b" doc:name="Is Blank String" doc:timestamp="1542822385563" message="Year built field is required" value="#[vars.invalidInpRefs]"/>
+            <validation:is-blank-string config-ref="validation" doc:id="7b56f6d0-93e0-42b3-a99a-6b98cb743d5b" doc:name="Is Blank String" doc:timestamp="1542822370907" message="Property Name is required" value="#[vars.invPropNameRefs]"/>
             <error-handler doc:id="a4e931e6-a92e-45a1-a899-230e54a06d4a" doc:name="" doc:timestamp="1542738932456">
                 <on-error-propagate type="VALIDATION:NOT_BLANK_STRING">
                     <ee:transform doc:id="3b0ab250-d43c-483d-8f66-b4c55689fc6b" doc:name="Transform" doc:timestamp="1542743064000">
@@ -261,7 +279,7 @@ errors:[{
         </try>
         <validation:is-not-empty-collection config-ref="validation" doc:id="603605d3-b36f-4b22-b5eb-1bf112d1b71f" doc:name="Is Not Empty Collection" doc:timestamp="1542401416527" message="Deal Participant should have at least one Sponsor" values="#[(payload.dealParticipants filter ((item, index) -&gt; item.participantRoleType contains(&quot;Sponsor&quot;)))]"/>
         <choice doc:id="864826a5-7d2d-4f78-809b-13c0ea812b53" doc:name="Choice" doc:timestamp="1542402944196">
-            <when expression='#[sizeOf(payload.properties filter($.propertyType == "Seniors")) != 0]'>
+            <when expression="#[sizeOf(payload.properties filter($.propertyType == &quot;Seniors&quot;)) != 0]">
                 <set-variable doc:id="077d361e-61f3-489f-9df1-f9be8af8e11c" doc:name="Set Variable" doc:timestamp="1542403651885" value="#[payload.properties filter($.propertyType == &quot;Seniors&quot;)]" variableName="senProps"/>
                 <ee:transform doc:id="6d4c5773-ae79-4fff-a720-2448e98702fe" doc:name="Transform" doc:timestamp="1542745452902">
                     <ee:variables>
@@ -300,14 +318,14 @@ output application/java
                     </ee:variables>
                 </ee:transform>
                 <try doc:id="1ac44a61-537b-4bdc-9d70-d9d93711e487" doc:name="Try" doc:timestamp="1542740551277">
-                    <validation:is-empty-collection config-ref="validation" doc:id="909afb89-1def-4337-9e55-47ab89fa47d8" doc:name="Assisted Living" doc:timestamp="1542746981154" message="#[&quot;Properties (&quot; ++ vars.assistedLivingRefs ++ &quot;) should have values for assistedLivingBedCount, assistedLivingUnitCount and assistedLivingPercent&quot;]" values="#[vars.senProps filter ($.assistedLivingIndicator == &quot;Yes&quot; and (isEmpty($.assistedLivingBedCount) == true or isEmpty($.assistedLivingUnitCount) == true or isEmpty($.assistedLivingPercent) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="5186d2ae-6286-4f0e-83a2-8420a9ea4fc9" doc:name="Independent Living" doc:timestamp="1542747004796" message="#[&quot;Properties (&quot; ++ vars.indLivingRefs ++ &quot;) should have independentLivingBedCount, independentLivingPercent and independentLivingUnitCount&quot;]" values="#[vars.senProps filter ($.independentLivingIndicator == &quot;Yes&quot; and (isEmpty($.independentLivingBedCount) == true or isEmpty($.independentLivingPercent) == true or isEmpty($.independentLivingUnitCount) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="d5e85606-8feb-4e1e-973c-76392fee6cd6" doc:name="Alzheimer" doc:timestamp="1542747023242" message="#[&quot;Properties ( &quot; ++ vars.alzRefs ++ &quot;) should have alzheimerCareBedCount, alzheimerCarePercent and alzheimerCareUnitCount values&quot;]" values="#[vars.senProps filter ($.alzheimerCareIndicator == &quot;Yes&quot; and (isEmpty($.alzheimerCareBedCount) == true or isEmpty($.alzheimerCarePercent) == true or isEmpty($.alzheimerCareUnitCount) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="c6674509-7445-49ce-aa50-d1fc12d0cfe5" doc:name="Medicaid" doc:timestamp="1542747042138" message="#[&quot;Properties ( &quot; ++ vars.medRefs ++ &quot; ) should have values for numberOfMedicaidResidents, medicaidBedsPercent and medicaidUnitsPercent&quot;]" values="#[vars.senProps filter ($.medicaidIndicator == &quot;Yes&quot; and (isEmpty($.numberOfMedicaidResidents) == true or isEmpty($.medicaidBedsPercent) == true or isEmpty($.medicaidUnitsPercent) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="46e54ac4-c431-4149-bb4f-e38ccec23790" doc:name="Subsidies" doc:timestamp="1542747063281" message="#[&quot;Properties ( &quot; ++ vars.subsRefs ++ &quot; ) should have values for numberOfOtherSubsidiesResidents, otherSubsidiesBedsPercent and otherSubsidiesUnitsPercent&quot;]" values="#[vars.senProps filter ($.otherSubsidiesIndicator == &quot;Yes&quot; and (isEmpty($.numberOfOtherSubsidiesResidents) == true or isEmpty($.otherSubsidiesBedsPercent) == true or isEmpty($.otherSubsidiesUnitsPercent) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="430327ec-48af-4fa3-b2e3-26f7b7bbbafa" doc:name="certificationLicensureIndicator" doc:timestamp="1542648741958" message="#[&quot;Properties ( &quot; ++ vars.certRefs ++ &quot; ) should have value for certificationLicensureIndicator&quot;]" values="#[vars.senProps filter ((isEmpty($.certificationLicensureIndicator) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="516b6de1-d23f-48ba-865a-e2064f077250" doc:name="managementAgreementIndicator" doc:timestamp="1542648752114" message="#[&quot;Properties ( &quot; ++ vars.managementRefs ++ &quot; ) should have value for managementAgreementIndicator&quot;]" values="#[vars.senProps filter ((isEmpty($.managementAgreementIndicator) == true))]"/>
-                    <validation:is-empty-collection config-ref="validation" doc:id="07e1656f-c02e-4849-bdd8-f20e488bd5a4" doc:name="operatingLeaseIndicator" doc:timestamp="1542648760143" message="#[&quot;Properties ( &quot; ++ vars.leaseRefs ++ &quot; ) should have value for operatingLeaseIndicator&quot;]" values="#[vars.senProps filter ((isEmpty($.operatingLeaseIndicator) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="909afb89-1def-4337-9e55-47ab89fa47d8" doc:name="Assisted Living" doc:timestamp="1542822481754" message="assistedLivingBedCount, assistedLivingUnitCount and assistedLivingPercent are required" values="#[vars.senProps filter ($.assistedLivingIndicator == &quot;Yes&quot; and (isEmpty($.assistedLivingBedCount) == true or isEmpty($.assistedLivingUnitCount) == true or isEmpty($.assistedLivingPercent) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="5186d2ae-6286-4f0e-83a2-8420a9ea4fc9" doc:name="Independent Living" doc:timestamp="1542822518504" message="independentLivingBedCount, independentLivingPercent and independentLivingUnitCount are required" values="#[(vars.senProps filter ($.independentLivingIndicator == &quot;Yes&quot; and (isEmpty($.independentLivingBedCount) == true or isEmpty($.independentLivingPercent) == true or isEmpty($.independentLivingUnitCount) == true)))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="d5e85606-8feb-4e1e-973c-76392fee6cd6" doc:name="Alzheimer" doc:timestamp="1542822497538" message="alzheimerCareBedCount, alzheimerCarePercent and alzheimerCareUnitCount values are required" values="#[vars.senProps filter ($.alzheimerCareIndicator == &quot;Yes&quot; and (isEmpty($.alzheimerCareBedCount) == true or isEmpty($.alzheimerCarePercent) == true or isEmpty($.alzheimerCareUnitCount) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="c6674509-7445-49ce-aa50-d1fc12d0cfe5" doc:name="Medicaid" doc:timestamp="1542822429078" message="numberOfMedicaidResidents, medicaidBedsPercent and medicaidUnitsPercent are required" values="#[vars.senProps filter ($.medicaidIndicator == &quot;Yes&quot; and (isEmpty($.numberOfMedicaidResidents) == true or isEmpty($.medicaidBedsPercent) == true or isEmpty($.medicaidUnitsPercent) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="46e54ac4-c431-4149-bb4f-e38ccec23790" doc:name="Subsidies" doc:timestamp="1542822462586" message="numberOfOtherSubsidiesResidents, otherSubsidiesBedsPercent and otherSubsidiesUnitsPercent are required" values="#[vars.senProps filter ($.otherSubsidiesIndicator == &quot;Yes&quot; and (isEmpty($.numberOfOtherSubsidiesResidents) == true or isEmpty($.otherSubsidiesBedsPercent) == true or isEmpty($.otherSubsidiesUnitsPercent) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="430327ec-48af-4fa3-b2e3-26f7b7bbbafa" doc:name="certificationLicensureIndicator" doc:timestamp="1542822534822" message="certificationLicensureIndicator is required" values="#[vars.senProps filter ((isEmpty($.certificationLicensureIndicator) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="516b6de1-d23f-48ba-865a-e2064f077250" doc:name="managementAgreementIndicator" doc:timestamp="1542822406542" message="managementAgreementIndicator is required" values="#[vars.senProps filter ((isEmpty($.managementAgreementIndicator) == true))]"/>
+                    <validation:is-empty-collection config-ref="validation" doc:id="07e1656f-c02e-4849-bdd8-f20e488bd5a4" doc:name="operatingLeaseIndicator" doc:timestamp="1542822548179" message="operatingLeaseIndicator is required" values="#[vars.senProps filter ((isEmpty($.operatingLeaseIndicator) == true))]"/>
                     <error-handler doc:id="7d7ef0c4-7982-4ac3-883b-18145674a2df" doc:name="" doc:timestamp="1542740551494">
                         <on-error-propagate type="VALIDATION:NOT_EMPTY_COLLECTION">
                             <ee:transform doc:id="fb5f1563-d102-4865-8369-aff8d3a5299a" doc:name="Transform" doc:timestamp="1542811299888">
@@ -361,5 +379,95 @@ errors:[{
                 <set-payload doc:id="f4802dcb-2e54-4a8a-a776-02d8070ae113" doc:name="Do nothing" doc:timestamp="1542595471199" value="#[payload]"/>
             </otherwise>
         </choice>
+    </flow>
+    <flow doc:id="dc876e7a-9d52-4e6d-aa01-584d11bc3d7e" doc:name="TranslateBackend" doc:timestamp="1542821552469" name="translatebackend">
+        <set-variable doc:id="ef0511e1-2765-41be-b168-2a8d1fbe39bd" doc:name="Set Variable" doc:timestamp="1542826762503" value="#[{&quot;Name&quot;:&quot;dealName&quot;, &quot;Agreement_Type__c&quot;:&quot;agreementType&quot;,&quot;Year_Last_Renovated__c&quot;:&quot;yearLastRenovated&quot;,&quot;State__c&quot;:&quot;state&quot;}]" variableName="sfToRaml"/>
+        <ee:transform doc:id="a41fa67e-a972-401e-b49d-7c5bde8b1a61" doc:name="Transform" doc:timestamp="1542827569942">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var sfError = read((((error.description default "") splitBy("response body: "))[1] default ""),"application/json")
+---
+
+sfError.results[0].errors map(
+	if(sizeOf($.fields) > 0)(
+	{
+    "referenceId":sfError.results[0].referenceId,
+	"fields":$.fields map (
+		vars.sfToRaml[$] default ""
+	),
+	("message":"Required fields are missing: [" ++ ($.fields map (
+		vars.sfToRaml[$] default ""
+	) joinBy (", ")) ++ "]") if(($.message default"") contains("Required fields are missing")),
+    ("message":$.message) if(not (($.message default"")  contains("Required fields are missing")))
+}) else sfError)]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow doc:id="f50a668d-378b-4502-a5c8-730d3fe00f21" doc:name="GoogleGeocode" doc:timestamp="1543240990447" name="googlegeocode">
+        <set-payload doc:id="e13779af-8c9b-4a02-9cf3-84fdc0bb1e17" doc:name="Set Payload" doc:timestamp="1543241633643" value="#[vars.originalPayload.properties]"/>
+        <set-variable doc:id="c196ac9d-8dad-4a24-bfd3-e6723848ae8c" doc:name="Set Variable" doc:timestamp="1543251153437" value="#[%dw 2.0&#13;&#10;output application/json&#13;&#10;---&#13;&#10;[]]" variableName="propsToGeo"/>
+        <foreach batchSize="1" doc:id="8566ee24-813a-4de4-af5b-091f5749cb55" doc:name="Foreach" doc:timestamp="1543241680794">
+            <ee:transform doc:id="19e3cb0c-7b7a-4dc5-8f5b-8703151cb7c8" doc:name="Transform" doc:timestamp="1543261514507">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output text/plain
+---
+"https://maps.googleapis.com/maps/api/geocode/json?key=API_KEY&address=" ++ (((payload.streetAddress default "") ++ " " ++ (payload.state default "") ++ " " ++ (payload.postalCode default "")) replace / / with "+")]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="currentRef"><![CDATA[%dw 2.0
+output application/java
+---
+payload.reference]]></ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger doc:id="6b87dbd6-6290-48ab-a345-c8d7d1a54041" doc:name="Logger" doc:timestamp="1543254440087" message="#[&quot;Sending address to google -&gt; &quot; ++ payload]"/>
+            <http:request config-ref="http_request" doc:id="7467deb9-9d78-4dd6-88ce-80fe0e76b14e" doc:name="Request" doc:timestamp="1543264319599" outputMimeType="application/json" sendBodyMode="NEVER" url="#[payload]">
+                <http:uri-params>#[%dw 2.0
+output application/java  
+---
+{}]</http:uri-params>
+                <http:query-params>#[%dw 2.0
+output application/java  
+---
+{}]</http:query-params>
+            </http:request>
+            <logger doc:id="742b47bc-83c8-482f-9cc4-5802e4f269d4" doc:name="Logger" doc:timestamp="1543254480075" message="#[payload]"/>
+            <choice doc:id="0bac7eaa-e586-4226-8d1c-008da80740ab" doc:name="Choice" doc:timestamp="1543243251027">
+                <when expression="#[payload.status == &quot;OK&quot;]">
+                    <ee:transform doc:id="cf30dc52-2135-4cc9-a3e7-46a79e33c684" doc:name="Transform" doc:timestamp="1543250939711">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+({
+    "reference": vars.currentRef,
+    latitude: payload.results[0].geometry.location.lat,
+    longitude: payload.results[0].geometry.location.lng,
+    status: payload.status
+})]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                    <set-variable doc:id="1ac66d0e-7f54-4bcd-9dc6-17ecbbbce1ec" doc:name="Set Variable" doc:timestamp="1543252952258" value="#[%dw 2.0&#13;&#10;output application/json&#13;&#10;---&#13;&#10;(vars.propsToGeo default []) ++ [payload]]" variableName="propsToGeo"/>
+                </when>
+                <otherwise>
+                    <ee:transform doc:id="c2f7c7b7-a1e0-4f55-9b41-f340bd4dd8a7" doc:name="Transform" doc:timestamp="1543250948069">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+({
+    reference: vars.currentRef,
+    latitude: 0,
+    longitude: 0,
+    status: payload.status
+})]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                    <set-variable doc:id="25d4dfd5-2a0c-44a0-9be6-69f22e715c3e" doc:name="Set Variable" doc:timestamp="1543252943751" value="#[%dw 2.0&#13;&#10;output application/json&#13;&#10;---&#13;&#10;(vars.propsToGeo default []) ++ [payload]]" variableName="propsToGeo"/>
+                </otherwise>
+            </choice>
+        </foreach>
     </flow>
 </mule>
