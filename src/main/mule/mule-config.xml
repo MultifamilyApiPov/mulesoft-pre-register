@@ -229,10 +229,14 @@ output application/java
 output application/json
 ---
 {
-    "dealId":payload[0].Deal_ID__c,
-    ("geocoding":{
-        "failed":vars.propsToGeo filter ($.status != "OK") map ($.reference)
-    }) if(sizeOf((vars.propsToGeo filter ($.status != "OK")) default []) > 0)
+	"dealId": payload[0].Deal_ID__c,
+	("geocoding": vars.propsToGeo filter($.status != "OK") map (
+                ($.reference default ""): {
+                "type":"property",
+                "success": false,
+                "status": $.status
+                }
+        ))if(sizeOf((vars.propsToGeo filter($.status != "OK")) default[]) > 0)
 }]]></ee:set-payload>
             </ee:message>
         </ee:transform>
